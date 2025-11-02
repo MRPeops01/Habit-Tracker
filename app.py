@@ -8,6 +8,7 @@ load_dotenv()
 
 # Create a global MongoClient with TLS for secure connection
 MONGO_URI = os.environ.get("MONGODB_URI")
+
 client = MongoClient(
     MONGO_URI,
     tls=True,
