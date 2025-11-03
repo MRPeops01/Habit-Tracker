@@ -1,4 +1,6 @@
 import os
+import sys
+import logging
 from flask import Flask
 from routes import pages
 from pymongo import MongoClient
@@ -6,19 +8,36 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Create a global MongoClient with TLS for secure connection
-MONGO_URI = os.environ.get("MONGODB_URI")
+# -----------------------------
+# Configure MongoDB connection
+# -----------------------------
+MONGO_URI = os.environ.get("MONGODB_URI", "").strip()  # Remove trailing whitespace/newlines
 
-client = MongoClient(
-    MONGO_URI,
-    tls=True,
-    tlsAllowInvalidCertificates=False,  # keep False if your Atlas certs are valid
-    serverSelectionTimeoutMS=30000      # 30-second timeout
-)
+if not MONGO_URI:
+    logging.error("MONGO_URI environment variable is not set!")
+    sys.exit(1)
 
-db = client.get_default_database()
+try:
+    client = MongoClient(
+        MONGO_URI,
+        tls=True,
+        tlsAllowInvalidCertificates=False,  # keep False if Atlas certs are valid
+        serverSelectionTimeoutMS=30000      # 30-second timeout
+    )
+    # Test connection immediately
+    client.admin.command("ping")
+    logging.info("MongoDB connection successful.")
 
+    # Explicitly select your database
+    db = client["habit_tracker"]
 
+except Exception:
+    logging.exception("Failed to connect to MongoDB")
+    sys.exit(1)
+
+# -----------------------------
+# Flask app factory
+# -----------------------------
 def create_app():
     app = Flask(__name__)
 
@@ -28,4 +47,20 @@ def create_app():
     # Register routes blueprint
     app.register_blueprint(pages)
 
+    # Optional: enable debug locally
+    if os.environ.get("FLASK_DEBUG") == "1":
+        app.config['DEBUG'] = True
+
     return app
+
+# -----------------------------
+# Run locally for testing
+# -----------------------------
+if __name__ == "__main__":
+    try:
+        app = create_app()
+        port = int(os.environ.get("PORT", 5000))
+        app.run(host="0.0.0.0", port=port)
+    except Exception:
+        logging.exception("App failed to start")
+        sys.exit(1)
